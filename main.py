@@ -18,9 +18,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import config
 from pipeline import run_pipeline
 
-# ---------------------------------------------------------------------------
-# App setup
-# ---------------------------------------------------------------------------
 app = FastAPI(
     title="DDR Report Generator",
     description=(
@@ -41,16 +38,10 @@ app.add_middleware(
 # In-memory job store (swap for Redis/SQLite for production)
 JOBS: dict[str, dict] = {}
 
-# ---------------------------------------------------------------------------
-# Ensure directories exist on startup
-# ---------------------------------------------------------------------------
 for d in [config.UPLOAD_DIR, config.OUTPUT_DIR, config.TEMP_IMG_DIR]:
     os.makedirs(d, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def _save_upload(upload: UploadFile, dest: str):
     with open(dest, "wb") as f:
         shutil.copyfileobj(upload.file, f)
@@ -91,9 +82,6 @@ def _run_job(job_id: str, insp_path: str,
         _cleanup(insp_path, thermal_path, sample_ddr_path)
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 @app.get("/", tags=["Health"])
 def root():
     return {
