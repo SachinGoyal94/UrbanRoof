@@ -1,7 +1,5 @@
 import json, config
 
-
-
 PROMPT = """You are a thermal imaging specialist for building diagnostics.
 
 Analyze the thermal report text below. For each thermal reading found:

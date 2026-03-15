@@ -114,3 +114,61 @@ def run_synthesis_agent(orchestrator_out: dict,
     print(f"  [Synthesis Agent] Built DDR with "
           f"{len(result.get('area_observations', []))} area sections")
     return result
+
+
+def run_synthesis_agent_with_feedback(
+    orchestrator_out: dict,
+    inspection_out:  dict,
+    thermal_out:     dict,
+    root_cause_out:  dict,
+    recommendations_out: dict,
+    fix_instructions: str,
+) -> dict:
+    """
+    Re-run the synthesis agent with explicit QA feedback.
+    The fix_instructions are appended to the prompt to guide corrections.
+    """
+    print("  [Synthesis Agent] Re-running with QA feedback...")
+
+    feedback_prompt = f"""{PROMPT}
+
+IMPORTANT — Fix the following issues from QA review:
+{fix_instructions}
+
+Ensure all fixes are applied, every section is complete, and the output matches the JSON structure exactly."""
+
+    content = f"""
+<orchestrator_plan>
+{json.dumps(orchestrator_out, indent=2)}
+</orchestrator_plan>
+
+<inspection_analysis>
+{json.dumps(inspection_out, indent=2)}
+</inspection_analysis>
+
+<thermal_analysis>
+{json.dumps(thermal_out, indent=2)}
+</thermal_analysis>
+
+<root_cause_analysis>
+{json.dumps(root_cause_out, indent=2)}
+</root_cause_analysis>
+
+<recommendations>
+{json.dumps(recommendations_out, indent=2)}
+</recommendations>
+
+{feedback_prompt}
+"""
+    response = _client.models.generate_content(
+        model=config.MODEL_NAME,
+        contents=content,
+        config=types.GenerateContentConfig(
+            temperature=0.1,
+            response_mime_type="application/json",
+        ),
+    )
+    result   = json.loads(response.text)
+    print(f"  [Synthesis Agent] Built corrected DDR with "
+          f"{len(result.get('area_observations', []))} area sections")
+    return result

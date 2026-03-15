@@ -14,7 +14,8 @@ def extract_text(pdf_path: str) -> dict:
 
     with pdfplumber.open(pdf_path) as pdf:
         full_text = ""
-        for page in pdf.pages:
+        for page_num, page in enumerate(pdf.pages, start=1):
+            full_text += f"\n--- PAGE {page_num} ---\n"
             full_text += page.extract_text() or ""
 
         # Extract tables (summary table, checklists)

@@ -1,17 +1,21 @@
 import json, config
 
-
 PROMPT = """You are the lead building inspection coordinator.
+
 You have been given three documents:
-1. A visual inspection report (Sample Report)
-2. A thermal imaging report (Thermal Images)
-3. A completed DDR sample (Main DDR) — use this ONLY to understand
-   the expected depth, structure, and writing style of the final output.
-   Do NOT copy content from it — it is a different property.
+1. A visual inspection report (Sample Report) WITH PAGE MARKERS (--- PAGE N ---)
+2. A thermal imaging report (Thermal Images) WITH PAGE MARKERS
+3. A completed DDR sample (Main DDR) — use ONLY as a style/depth reference.
+   Do NOT copy its content — it is a different property.
 
-Your job: read all three carefully and produce a master analysis plan.
+Read all three carefully and produce a master analysis plan.
 
-Return JSON with this structure:
+CRITICAL INSTRUCTION FOR image_mapping: 
+- Use the --- PAGE N --- markers in the text to identify which pages have images for each area.
+- For each area identified, list the exact inspection_pages and thermal_pages where photos appear.
+- Be thorough: scan the entire document for page markers and area names to build an accurate map.
+
+Return JSON:
 {
   "property_info": {
     "address": "string",
@@ -20,20 +24,26 @@ Return JSON with this structure:
     "property_type": "string",
     "age_years": "string",
     "floors": "string",
-    "previous_repairs": "string"
+    "previous_repairs": "string",
+    "report_id": "string"
   },
   "areas_identified": [
     {
-      "area_name": "string",
+      "area_name": "string  (use the exact name as it appears in the document)",
       "has_visual_data": true/false,
       "has_thermal_data": true/false,
-      "thermal_pages": [list of page numbers from thermal doc],
       "apparent_severity": "Critical|High|Medium|Low|Unknown",
-      "key_issues_summary": "1-2 sentence summary of what is wrong here"
+      "key_issues_summary": "1-2 sentence summary"
     }
   ],
-  "document_quality_notes": "any observations about data gaps or conflicts",
-  "expected_section_count": number
+  "image_mapping": [
+    {
+      "area_name": "string  (must exactly match an area_name above)",
+      "inspection_pages": [list of page numbers in inspection PDF with photos for this area],
+      "thermal_pages":    [list of page numbers in thermal PDF for this area]
+    }
+  ],
+  "document_quality_notes": "string"
 }
 """
 from google import genai
@@ -46,13 +56,14 @@ def run_orchestrator(insp_text: str, thermal_text: str,
     print("  [Orchestrator] Analyzing all documents...")
 
     # Build content parts — text only for orchestrator (planning pass)
+    # NO CHARACTER LIMITS — preserve page markers for accurate image_mapping
     content = f"""
 <sample_report>
-{insp_text[:8000]}
+{insp_text}
 </sample_report>
 
 <thermal_report>
-{thermal_text[:4000]}
+{thermal_text}
 </thermal_report>
 
 <reference_ddr_style>

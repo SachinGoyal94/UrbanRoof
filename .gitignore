@@ -12,3 +12,17 @@ env/
 
 .idea/
 temp_images
+
+# Python compiled files and cache
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.pytest_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+
+docs/
+outputs/

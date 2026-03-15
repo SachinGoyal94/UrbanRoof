@@ -4,22 +4,25 @@ report/pdf_assembler.py
 Produces a professional DDR report matching the UrbanRoof Main_DDR.pdf:
   - Dark hexagon-pattern cover page
   - Disclaimer page
-  - Auto-built Table of Contents (live page numbers via multiBuild)
+  - Auto-built Table of Contents  (live page numbers via multiBuild)
   - UrbanRoof branded header + footer on every content page
   - Section 1  : Introduction
   - Section 2  : General Information
-  - Section 3  : Visual Observations (per-area observation tables)
-  - Section 4  : Analysis & Suggestions
+  - Section 3  : Visual Observations  (per-area observation tables)
+  - Section 4  : Analysis and Suggestions
       4.1  Recommended treatments table
       4.2  Delayed action consequences
       4.3  Negative / Positive summary table
       4.4  Thermal image pairs  (visual + IR side-by-side)
       4.5  Visual references
   - Section 5  : Probable Root Causes
-  - Section 6  : Severity Assessment (colour-coded table + callout)
+  - Section 6  : Severity Assessment  (colour-coded table + callout)
   - Section 7  : Additional Notes
   - Section 8  : Missing / Unclear Information
   - Section 9  : Limitation and Precaution Note
+
+Image placement uses the orchestrator's image_mapping (Gemini-built,
+no hardcoded page numbers) with a fuzzy fallback.
 """
 
 import os
@@ -38,9 +41,6 @@ from reportlab.platypus       import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-# ---------------------------------------------------------------------------
-# Colours  (from Main_DDR.pdf palette)
-# ---------------------------------------------------------------------------
 C_DARK     = colors.HexColor("#1C1C1C")
 C_YELLOW   = colors.HexColor("#F5A623")
 C_GREEN    = colors.HexColor("#4CAF50")
@@ -48,9 +48,6 @@ C_HDR_BG   = colors.HexColor("#1a1a2e")
 C_WHITE    = colors.white
 C_LIGHT_BG = colors.HexColor("#F5F5F5")
 C_BORDER   = colors.HexColor("#CCCCCC")
-C_GOOD     = colors.HexColor("#27AE60")
-C_MODERATE = colors.HexColor("#E67E22")
-C_POOR     = colors.HexColor("#C0392B")
 
 SEV_COLORS = {
     "Critical": colors.HexColor("#C0392B"),
@@ -64,9 +61,6 @@ PRI_COLORS = {
     "Long-term":  colors.HexColor("#27AE60"),
 }
 
-# ---------------------------------------------------------------------------
-# Page geometry
-# ---------------------------------------------------------------------------
 PW, PH   = A4
 MARGIN   = 1.8 * cm
 DOC_W    = PW - 2 * MARGIN
@@ -74,9 +68,6 @@ FOOTER_H = 1.2 * cm
 HDR_H    = 1.3 * cm
 
 
-# ===========================================================================
-# Styles
-# ===========================================================================
 def _styles():
     return {
         # cover
@@ -126,12 +117,8 @@ def _styles():
         "td_c": ParagraphStyle("td_c", fontName="Helvetica", fontSize=9,
                                 textColor=C_DARK, alignment=TA_CENTER),
     }
-
-
-# ===========================================================================
-# Canvas callbacks
-# ===========================================================================
 def _draw_hex_grid(c):
+    """Subtle hexagon tile pattern over the dark cover background."""
     sz  = 26
     col = colors.HexColor("#252525")
     w   = sz * math.sqrt(3)
@@ -162,12 +149,12 @@ def _draw_hex_grid(c):
 def _on_cover(c, doc):
     c.saveState()
 
-    # background
+    # solid dark background
     c.setFillColor(C_DARK)
     c.rect(0, 0, PW, PH, fill=1, stroke=0)
     _draw_hex_grid(c)
 
-    # yellow accent triangle bottom-right
+    # yellow triangle accent (bottom-right)
     c.setFillColor(C_YELLOW)
     p = c.beginPath()
     p.moveTo(PW * 0.52, 0)
@@ -202,7 +189,7 @@ def _on_cover(c, doc):
     c.drawString(MARGIN * 2, PH * 0.455,
                  f"Report ID: {meta.get('report_id', 'DNR-')}")
 
-    # prepared by / for
+    # prepared by / for block
     lx = MARGIN * 2
     rx = PW / 2 + MARGIN
     by = MARGIN * 3.2
@@ -232,7 +219,7 @@ def _on_cover(c, doc):
 def _on_content(c, doc):
     c.saveState()
 
-    # header bar
+    # ── header bar ──────────────────────────────────────────────
     c.setFillColor(C_HDR_BG)
     c.rect(0, PH - HDR_H, PW, HDR_H, fill=1, stroke=0)
     c.setFillColor(C_GREEN)
@@ -240,14 +227,15 @@ def _on_content(c, doc):
 
     c.setFont("Helvetica-Bold", 8)
     c.setFillColor(C_WHITE)
-    c.drawString(MARGIN, PH - HDR_H + 0.38 * cm, "Detailed Diagnosis Report")
+    c.drawString(MARGIN, PH - HDR_H + 0.38 * cm,
+                 "Detailed Diagnosis Report")
 
     c.setFont("Helvetica", 7)
     c.setFillColor(colors.HexColor("#BBBBBB"))
     c.drawRightString(PW - MARGIN, PH - HDR_H + 0.38 * cm,
                       doc.ddr_meta.get("address", "")[:70])
 
-    # footer
+    # ── footer ───────────────────────────────────────────────────
     c.setStrokeColor(C_GREEN)
     c.setLineWidth(0.8)
     c.line(MARGIN, FOOTER_H + 3, PW - MARGIN, FOOTER_H + 3)
@@ -267,16 +255,12 @@ def _on_content(c, doc):
     c.restoreState()
 
 
-# ===========================================================================
-# Custom DocTemplate
-# ===========================================================================
 class DDRDoc(BaseDocTemplate):
     def __init__(self, filename, ddr_meta, **kw):
         self.ddr_meta = ddr_meta
         super().__init__(filename, **kw)
 
     def afterFlowable(self, flowable):
-        """Register headings so the TOC captures them."""
         if isinstance(flowable, Paragraph):
             sname = flowable.style.name
             text  = flowable.getPlainText()
@@ -286,11 +270,8 @@ class DDRDoc(BaseDocTemplate):
                 self.notify("TOCEntry", (1, text, self.page))
 
 
-# ===========================================================================
-# Reusable flowable builders
-# ===========================================================================
 def _sec_hdr(title: str, s: dict, w: float) -> list:
-    """Dark header bar + green rule — opens every section."""
+    """Dark header bar + green rule — opens every numbered section."""
     tbl = Table([[Paragraph(title, s["sec_title"])]], colWidths=[w])
     tbl.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, -1), C_HDR_BG),
@@ -298,7 +279,8 @@ def _sec_hdr(title: str, s: dict, w: float) -> list:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
         ("LEFTPADDING",   (0, 0), (-1, -1), 10),
     ]))
-    return [tbl, HRFlowable(width=w, thickness=2, color=C_GREEN, spaceAfter=10)]
+    return [tbl, HRFlowable(width=w, thickness=2,
+                             color=C_GREEN, spaceAfter=10)]
 
 
 def _kv(rows: list, s: dict, w: float) -> Table:
@@ -321,7 +303,7 @@ def _kv(rows: list, s: dict, w: float) -> Table:
 
 
 def _obs_tbl(obs: dict, s: dict, w: float) -> Table:
-    """Per-area observation table with aspect / finding rows."""
+    """Per-area observation table with Aspect / Finding rows."""
     def cell(text):
         return Paragraph(str(text or "Not Available"), s["td"])
 
@@ -357,13 +339,14 @@ def _obs_tbl(obs: dict, s: dict, w: float) -> Table:
 
 
 def _img_block(path, caption: str, s: dict, iw: float, ih: float) -> list:
-    """Single image or grey placeholder + caption."""
+    """Single image or grey placeholder + caption underneath."""
     if path and os.path.exists(path):
         try:
             return [Image(path, width=iw, height=ih),
                     Paragraph(caption, s["caption"])]
         except Exception:
             pass
+    # grey placeholder
     box = Table(
         [[Paragraph("Image Not Available", s["img_na"])]],
         colWidths=[iw], rowHeights=[ih]
@@ -380,7 +363,7 @@ def _img_block(path, caption: str, s: dict, iw: float, ih: float) -> list:
 def _img_pair(vis_path, thm_path,
               vis_cap: str, thm_cap: str,
               s: dict, w: float) -> Table:
-    """Side-by-side visual + thermal image pair."""
+    """Side-by-side visual + thermal image pair (mirrors Main DDR sec 4.4)."""
     iw  = w * 0.465
     ih  = 5.5 * cm
     gap = w - 2 * iw
@@ -401,7 +384,7 @@ def _img_pair(vis_path, thm_path,
 
 
 def _summary_tbl(area_obs: list, s: dict, w: float) -> Table:
-    """Negative / Positive summary table (section 4.3)."""
+    """Negative / Positive two-column summary table (section 4.3)."""
     data = [[Paragraph("Impacted Area  (−ve side)", s["th"]),
              Paragraph("Exposed / Source Area  (+ve side)", s["th"])]]
     for obs in area_obs:
@@ -425,7 +408,7 @@ def _summary_tbl(area_obs: list, s: dict, w: float) -> Table:
 
 
 def _severity_tbl(sev_list: list, s: dict, w: float) -> Table:
-    """Colour-coded severity table (section 6)."""
+    """Colour-coded severity assessment table (section 6)."""
     data  = [[Paragraph("Area", s["th"]),
               Paragraph("Level", s["th"]),
               Paragraph("Reasoning", s["th_l"])]]
@@ -461,7 +444,7 @@ def _severity_tbl(sev_list: list, s: dict, w: float) -> Table:
 
 
 def _recs_tbl(recs: list, s: dict, w: float) -> Table:
-    """Treatments / recommendations table (section 4.1)."""
+    """Recommended treatments table (section 4.1)."""
     data  = [[Paragraph("Area",      s["th"]),
               Paragraph("Treatment", s["th"]),
               Paragraph("Priority",  s["th"]),
@@ -501,7 +484,8 @@ def _recs_tbl(recs: list, s: dict, w: float) -> Table:
 
 
 def _overall_callout(level: str, w: float) -> Table:
-    bg = SEV_COLORS.get(level, C_MODERATE)
+    """Full-width coloured overall severity banner."""
+    bg = SEV_COLORS.get(level, colors.HexColor("#E67E22"))
     tbl = Table(
         [[Paragraph(
             f"Overall Property Severity: <b>{level}</b>",
@@ -517,40 +501,132 @@ def _overall_callout(level: str, w: float) -> Table:
     ]))
     return tbl
 
+def _find_images(area_name: str,
+                 images: dict,
+                 image_mapping: list):
+    """
+    Return (visual_path, thermal_path) for the given area.
 
-# ===========================================================================
-# Image-matching helper
-# ===========================================================================
-def _find_images(area_name: str, images: dict):
-    """Return (visual_path, thermal_path) best matching the area name."""
-    words = [w for w in area_name.lower().split() if len(w) > 3]
-    vis   = None
-    thm   = None
+    Strategy 1 — Gemini's explicit mapping
+    ----------------------------------------
+    The orchestrator agent returns image_mapping:
+        [{ "area_name": "office ceiling",
+           "inspection_pages": [12, 13],
+           "thermal_pages": [5] }, ...]
+
+    We look up the pages it identified and pull those image files.
+
+    Strategy 2 — fuzzy word match (fallback)
+    -----------------------------------------
+    If the mapping is missing or the area name doesn't match exactly,
+    we fall back to scanning image keys for matching words.
+    This handles cases where Gemini returns a slightly different area
+    name in area_observations vs image_mapping.
+
+    Works for ANY area name — office ceiling, basement parking,
+    rooftop terrace, etc. — because Gemini built the mapping from
+    the actual document, not from hardcoded lists.
+    """
+    area_lower = area_name.lower().strip()
+
+    vis = None
+    thm = None
+
+    # ── Strategy 1: use Gemini's page map ────────────────────────
+    if image_mapping:
+        # Find the mapping entry for this area
+        # Try exact match first, then partial
+        mapping_entry = None
+
+        for m in image_mapping:
+            mapped_area = m.get("area_name", "").lower().strip()
+            if mapped_area == area_lower:
+                mapping_entry = m
+                break
+
+        # Partial match fallback within the mapping
+        if not mapping_entry:
+            area_words = [w for w in area_lower.split() if len(w) > 3]
+            for m in image_mapping:
+                mapped_area = m.get("area_name", "").lower().strip()
+                if any(w in mapped_area for w in area_words):
+                    mapping_entry = m
+                    break
+
+        if mapping_entry:
+            # Get first valid inspection page
+            for pg in mapping_entry.get("inspection_pages", []):
+                key  = f"inspection_page_{pg}"
+                path = images.get(key)
+                if path and os.path.exists(path):
+                    vis = path
+                    break
+
+            # Get first valid thermal page
+            for pg in mapping_entry.get("thermal_pages", []):
+                key  = f"thermal_page_{pg}"
+                path = images.get(key)
+                if path and os.path.exists(path):
+                    thm = path
+                    break
+
+        # If we found both via mapping, return immediately
+        if vis and thm:
+            return vis, thm
+
+    # ── Strategy 2: fuzzy word scan over all image keys ──────────
+    words = [w for w in area_lower.split() if len(w) > 3]
+
+    if not words:
+        # Area name is very short — just take first available images
+        for label, path in images.items():
+            if not path or not os.path.exists(path):
+                continue
+            if "thermal" in label and thm is None:
+                thm = path
+            elif "inspection" in label and vis is None:
+                vis = path
+            if vis and thm:
+                break
+        return vis, thm
+
     for label, path in images.items():
+        if not path or not os.path.exists(path):
+            continue
         lab = label.lower()
         if not any(w in lab for w in words):
             continue
-        if "thermal" in lab:
-            if thm is None:
-                thm = path
-        else:
-            if vis is None:
-                vis = path
+        if "thermal" in lab and thm is None:
+            thm = path
+        elif "inspection" in lab and vis is None:
+            vis = path
+        if vis and thm:
+            break
+
     return vis, thm
 
 
-# ===========================================================================
-# Main public function
-# ===========================================================================
-def assemble_pdf(ddr: dict, images: dict, output_path: str):
+def assemble_pdf(
+    ddr:           dict,
+    images:        dict,
+    image_mapping: list,
+    output_path:   str,
+):
     """
     Build the full professional DDR PDF.
 
     Parameters
     ----------
-    ddr         : synthesised DDR dict from synthesis_agent
-    images      : {label: local_file_path} from image_extractor
-    output_path : destination path for the generated PDF
+    ddr           : synthesised DDR dict from synthesis_agent
+    images        : {label: local_file_path} from image_extractor
+                    Keys follow the pattern:
+                        "inspection_page_N"
+                        "thermal_page_N"
+    image_mapping : list from orchestrator agent
+                    Each entry: {area_name, inspection_pages, thermal_pages}
+                    Used to place the right images next to each area section.
+                    Falls back to fuzzy matching if empty or incomplete.
+    output_path   : destination path for the generated PDF
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -559,7 +635,7 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
             or ddr.get("property_metadata")
             or {})
 
-    # Defaults so we never crash on missing keys
+    # Defaults — we never crash on missing keys
     meta.setdefault("report_id",        "DNR-")
     meta.setdefault("inspection_date",  "Not Available")
     meta.setdefault("inspector",        "Not Available")
@@ -583,10 +659,12 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         bottomMargin=MARGIN + FOOTER_H,
     )
 
-    cover_frame = Frame(0, 0, PW, PH,
-                        leftPadding=0, rightPadding=0,
-                        topPadding=0, bottomPadding=0,
-                        id="cover")
+    cover_frame = Frame(
+        0, 0, PW, PH,
+        leftPadding=0, rightPadding=0,
+        topPadding=0, bottomPadding=0,
+        id="cover"
+    )
     content_frame = Frame(
         MARGIN, frame_bot,
         DOC_W, frame_top - frame_bot,
@@ -601,16 +679,9 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
 
     story = []
 
-    # =========================================================
-    # COVER  (canvas draws everything; one blank flowable
-    #         triggers the page break to Content template)
-    # =========================================================
     story.append(NextPageTemplate("Content"))
     story.append(PageBreak())
 
-    # =========================================================
-    # DISCLAIMER
-    # =========================================================
     story += _sec_hdr("Data and Information Disclaimer", s, DOC_W)
     for para in [
         "This property inspection is not an exhaustive inspection of the "
@@ -641,9 +712,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         story.append(Paragraph(para, s["disclaimer"]))
     story.append(PageBreak())
 
-    # =========================================================
-    # TABLE OF CONTENTS
-    # =========================================================
     story += _sec_hdr("Table of Contents", s, DOC_W)
     toc = TableOfContents()
     toc.levelStyles  = [s["toc1"], s["toc2"]]
@@ -651,9 +719,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
     story.append(toc)
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 1 — INTRODUCTION
-    # =========================================================
     story.append(Paragraph("SECTION 1    INTRODUCTION", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
                              color=C_GREEN, spaceAfter=10))
@@ -664,9 +729,8 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         "for a preliminary health inspection. The property owner approached "
         "UrbanRoof to carry out an initial site investigation and submit a "
         "Health Assessment Report based on testing and visual inspection. "
-        f"Site investigation was carried out on "
-        f"<b>{meta['inspection_date']}</b> and this inspection report is "
-        "submitted herewith.",
+        f"Site investigation was carried out on <b>{meta['inspection_date']}</b> "
+        "and this inspection report is submitted herewith.",
         s["body"]
     ))
 
@@ -687,15 +751,12 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
     story.append(Paragraph(
         "Conducting visual site inspection using necessary assessment tools "
         "including Tapping Hammer, Crack Gauge, IR Thermography, and Moisture "
-        "and pH Meter. Carried out by the UrbanRoof technical team of skilled "
-        "applicators on site using appropriate access equipment.",
+        "and pH Meter. Carried out by the UrbanRoof technical team using "
+        "appropriate access equipment.",
         s["body"]
     ))
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 2 — GENERAL INFORMATION
-    # =========================================================
     story.append(Paragraph("SECTION 2    GENERAL INFORMATION", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
                              color=C_GREEN, spaceAfter=10))
@@ -705,29 +766,26 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         ("Customer Name",      meta.get("customer_name",
                                         meta.get("address", ""))),
         ("Customer Address",   meta.get("address", "")),
-        ("E-Mail Address",     meta.get("email", "Not Available")),
-        ("Contact No.",        meta.get("contact", "Not Available")),
-        ("Case No.",           meta.get("report_id", "")),
-        ("Date of Inspection", meta.get("inspection_date", "")),
-        ("Inspected By",       meta.get("inspector", "")),
+        ("E-Mail Address",     meta.get("email",            "Not Available")),
+        ("Contact No.",        meta.get("contact",          "Not Available")),
+        ("Case No.",           meta.get("report_id",        "")),
+        ("Date of Inspection", meta.get("inspection_date",  "")),
+        ("Inspected By",       meta.get("inspector",        "")),
     ], s, DOC_W))
     story.append(Spacer(1, 0.5 * cm))
 
     story.append(Paragraph("2.2  Description of Site", s["area_h"]))
     story.append(_kv([
-        ("Site Address",             meta.get("address", "")),
-        ("Type of Structure",        meta.get("property_type", "")),
-        ("Floors",                   meta.get("floors", "")),
-        ("Year of Construction",     meta.get("year_built", "Not Available")),
-        ("Age of Building (years)",  meta.get("age_years", "")),
-        ("Previous Structure Audit", meta.get("previous_audit", "No")),
+        ("Site Address",             meta.get("address",          "")),
+        ("Type of Structure",        meta.get("property_type",    "")),
+        ("Floors",                   meta.get("floors",           "")),
+        ("Year of Construction",     meta.get("year_built",       "Not Available")),
+        ("Age of Building (years)",  meta.get("age_years",        "")),
+        ("Previous Structure Audit", meta.get("previous_audit",   "No")),
         ("Previous Repairs",         meta.get("previous_repairs", "No")),
     ], s, DOC_W))
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 3 — VISUAL OBSERVATIONS AND READINGS
-    # =========================================================
     story.append(Paragraph(
         "SECTION 3    VISUAL OBSERVATIONS AND READINGS", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
@@ -739,19 +797,22 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
     story.append(Spacer(1, 0.4 * cm))
 
     area_obs = ddr.get("area_observations", [])
+
     for idx, obs in enumerate(area_obs, start=2):
         area_title = obs.get("area", f"Area {idx}").title()
         level      = obs.get("severity", "Medium")
         sev_bg     = SEV_COLORS.get(level, C_BORDER)
 
         # area heading with inline severity badge on the right
-        badge_p = Paragraph(
+        badge = Paragraph(
             f"<b>{level}</b>",
             ParagraphStyle("ib", fontName="Helvetica-Bold", fontSize=9,
                            textColor=C_WHITE, alignment=TA_CENTER)
         )
-        hdr_row = [[Paragraph(f"3.{idx}  {area_title}", s["area_h"]), badge_p]]
-        hdr_tbl = Table(hdr_row, colWidths=[DOC_W * 0.82, DOC_W * 0.18])
+        hdr_tbl = Table(
+            [[Paragraph(f"3.{idx}  {area_title}", s["area_h"]), badge]],
+            colWidths=[DOC_W * 0.82, DOC_W * 0.18]
+        )
         hdr_tbl.setStyle(TableStyle([
             ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING",  (0, 0), (-1, -1), 0),
@@ -769,9 +830,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
 
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 4 — ANALYSIS AND SUGGESTIONS
-    # =========================================================
     story.append(Paragraph(
         "SECTION 4    ANALYSIS AND SUGGESTIONS", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
@@ -787,7 +845,7 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         story.append(Paragraph("No recommendations recorded.", s["body"]))
     story.append(Spacer(1, 0.5 * cm))
 
-    # 4.2 delayed action
+    # 4.2 delayed action consequences
     story.append(Paragraph(
         "4.2  Further Possibilities Due to Delayed Action", s["area_h"]))
     for rc in ddr.get("root_causes", []):
@@ -803,49 +861,79 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
     story.append(_summary_tbl(area_obs, s, DOC_W))
     story.append(PageBreak())
 
-    # 4.4 thermal image pairs
-    story.append(Paragraph(
-        "4.4  Thermal References for Negative Side Inputs", s["area_h"]))
-    for i, obs in enumerate(area_obs):
-        area_name  = obs.get("area", "")
-        area_title = area_name.title()
-        vis, thm   = _find_images(area_name, images)
-        neg_cap    = (obs.get("negative_observation") or "")[:90]
 
-        story.append(KeepTogether([
-            Paragraph(f"4.4.{i+1}  {area_title}", s["sub_h"]),
-            Paragraph(f"IMAGE: {neg_cap}", s["caption"]),
-            _img_pair(vis, thm,
-                      f"Visual — {area_title}",
-                      f"Thermal — {area_title}",
-                      s, DOC_W),
-            Spacer(1, 0.5 * cm),
-        ]))
+    # Check if ANY thermal image exists
+    has_thermal_images = False
+    for obs in area_obs:
+        area_name = obs.get("area", "")
+        _, thm = _find_images(area_name, images, image_mapping)
+        if thm:
+            has_thermal_images = True
+            break
+    
+    if has_thermal_images:
+        story.append(Paragraph(
+            "4.4  Thermal References for Negative Side Inputs", s["area_h"]))
 
-    story.append(PageBreak())
+        for i, obs in enumerate(area_obs):
+            area_name  = obs.get("area", "")
+            area_title = area_name.title()
+            neg_cap    = (obs.get("negative_observation") or "")[:90]
 
-    # 4.5 visual references
-    story.append(Paragraph(
-        "4.5  Visual References for Positive Side Inputs", s["area_h"]))
-    for i, obs in enumerate(area_obs):
-        area_name  = obs.get("area", "")
-        area_title = area_name.title()
-        vis, _     = _find_images(area_name, images)
+            vis, thm = _find_images(area_name, images, image_mapping)
+            
+            # Only render if thermal image exists for this area
+            if thm:
+                story.append(KeepTogether([
+                    Paragraph(f"4.4.{i+1}  {area_title}", s["sub_h"]),
+                    Paragraph(f"IMAGE: {neg_cap}", s["caption"]),
+                    _img_pair(
+                        vis, thm,
+                        f"Visual — {area_title}",
+                        f"Thermal — {area_title}",
+                        s, DOC_W
+                    ),
+                    Spacer(1, 0.5 * cm),
+                ]))
 
-        story.append(KeepTogether([
-            Paragraph(f"4.5.{i+1}  {area_title}", s["sub_h"]),
-            Paragraph((obs.get("positive_observation") or "")[:220], s["body"]),
-            _img_pair(vis, None,
-                      f"Source — {area_title}", "",
-                      s, DOC_W),
-            Spacer(1, 0.4 * cm),
-        ]))
+        story.append(PageBreak())
 
-    story.append(PageBreak())
+    # 4.5 visual references (positive / source side) (ONLY if visual images exist)
+    
+    # Check if ANY visual image exists
+    has_visual_images = False
+    for obs in area_obs:
+        area_name = obs.get("area", "")
+        vis, _ = _find_images(area_name, images, image_mapping)
+        if vis:
+            has_visual_images = True
+            break
+    
+    if has_visual_images:
+        story.append(Paragraph(
+            "4.5  Visual References for Positive Side Inputs", s["area_h"]))
 
-    # =========================================================
-    # SECTION 5 — PROBABLE ROOT CAUSES
-    # =========================================================
+        for i, obs in enumerate(area_obs):
+            area_name  = obs.get("area", "")
+            area_title = area_name.title()
+
+            vis, _ = _find_images(area_name, images, image_mapping)
+            
+            # Only render if visual image exists for this area
+            if vis:
+                story.append(KeepTogether([
+                    Paragraph(f"4.5.{i+1}  {area_title}", s["sub_h"]),
+                    Paragraph((obs.get("positive_observation") or "")[:220], s["body"]),
+                    _img_pair(
+                        vis, None,
+                        f"Source — {area_title}", "",
+                        s, DOC_W
+                    ),
+                    Spacer(1, 0.4 * cm),
+                ]))
+
+        story.append(PageBreak())
+
     story.append(Paragraph("SECTION 5    PROBABLE ROOT CAUSES", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
                              color=C_GREEN, spaceAfter=10))
@@ -860,9 +948,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
 
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 6 — SEVERITY ASSESSMENT
-    # =========================================================
     story.append(Paragraph("SECTION 6    SEVERITY ASSESSMENT", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
                              color=C_GREEN, spaceAfter=10))
@@ -872,7 +957,7 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         "thermal imaging findings.  Colour key: "
         "<font color='#C0392B'><b>Critical</b></font> — immediate structural risk  |  "
         "<font color='#E67E22'><b>High</b></font> — active moisture, urgent attention  |  "
-        "<font color='#B8860B'><b>Medium</b></font> — developing issue, attention within months  |  "
+        "<font color='#B8860B'><b>Medium</b></font> — developing issue  |  "
         "<font color='#27AE60'><b>Low</b></font> — preventive / cosmetic.",
         s["body"]
     ))
@@ -882,12 +967,10 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
     if sev_list:
         story.append(_severity_tbl(sev_list, s, DOC_W))
     story.append(Spacer(1, 0.4 * cm))
-    story.append(_overall_callout(ddr.get("overall_severity", "High"), DOC_W))
+    story.append(_overall_callout(
+        ddr.get("overall_severity", "High"), DOC_W))
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 7 — ADDITIONAL NOTES
-    # =========================================================
     story.append(Paragraph("SECTION 7    ADDITIONAL NOTES", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
                              color=C_GREEN, spaceAfter=10))
@@ -895,9 +978,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         ddr.get("additional_notes", "No additional notes."), s["body"]))
     story.append(Spacer(1, 0.5 * cm))
 
-    # =========================================================
-    # SECTION 8 — MISSING / UNCLEAR INFORMATION
-    # =========================================================
     story.append(Paragraph(
         "SECTION 8    MISSING OR UNCLEAR INFORMATION", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
@@ -911,9 +991,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
             "No significant information gaps were identified.", s["body"]))
     story.append(PageBreak())
 
-    # =========================================================
-    # SECTION 9 — LIMITATION AND PRECAUTION NOTE
-    # =========================================================
     story.append(Paragraph(
         "SECTION 9    LIMITATION AND PRECAUTION NOTE", s["sec_title"]))
     story.append(HRFlowable(width=DOC_W, thickness=2,
@@ -934,14 +1011,13 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         "When such cracks suddenly develop or appear to widen, the findings "
         "must be reported immediately to a Registered Structural Engineer.",
 
-        "If such work is beyond the scope of the inspection and the client is "
-        "concerned about any conditions noted, the inspector strongly recommends "
-        "consulting a qualified Licensed Contractor or Consulting Engineer.",
+        "If the client is concerned about any conditions noted, the inspector "
+        "strongly recommends consulting a qualified Licensed Contractor or "
+        "Consulting Engineer.",
 
-        "The Inspector's Report is an opinion of the present condition of the "
-        "property based on a visual examination of readily accessible features. "
-        "It does not include defects hidden behind walls, floors, ceilings, or "
-        "any inaccessible areas.",
+        "The Inspector's Report is based on a visual examination of readily "
+        "accessible features. It does not include defects hidden behind walls, "
+        "floors, ceilings, or any inaccessible areas.",
 
         "THIS IS NOT A CODE COMPLIANCE INSPECTION. The Inspector does not "
         "determine whether any aspect of the property complies with any past, "
@@ -950,9 +1026,6 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         story.append(Paragraph(lim, s["disclaimer"]))
         story.append(Spacer(1, 0.15 * cm))
 
-    # =========================================================
-    # BUILD  (two passes so the TOC has accurate page numbers)
-    # =========================================================
     doc.multiBuild(story)
 
     try:
@@ -960,4 +1033,5 @@ def assemble_pdf(ddr: dict, images: dict, output_path: str):
         pages = len(PdfReader(output_path).pages)
     except Exception:
         pages = "?"
+
     print(f"  PDF written → {output_path}  ({pages} pages)")
