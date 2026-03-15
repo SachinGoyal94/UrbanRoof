@@ -1,9 +1,9 @@
 fastapi
 uvicorn
 python-multipart
-google-generativeai
 pdfplumber
 pdf2image
 pillow
 reportlab
 python-dotenv
+google_genai
